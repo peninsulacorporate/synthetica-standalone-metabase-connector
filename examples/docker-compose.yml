@@ -1,0 +1,45 @@
+# Real Metabase + Postgres with seed data — for proving the standalone
+# server works against an actual Metabase instance (not a mock).
+#
+# Usage:
+#   cd examples/
+#   docker compose up -d
+#   python setup_metabase.py     # waits for ready, creates admin + API key + DB connection
+#   python run_real_demo.py      # calls the 6 direct-mode tools end-to-end
+#
+# Stops everything:
+#   docker compose down -v
+
+services:
+  postgres-data:
+    image: postgres:16-alpine
+    container_name: metabase_mcp_demo_pg
+    environment:
+      - POSTGRES_DB=demo
+      - POSTGRES_USER=demo
+      - POSTGRES_PASSWORD=demo
+    volumes:
+      - ./seed.sql:/docker-entrypoint-initdb.d/seed.sql:ro
+    ports:
+      - "55432:5432"          # exposed only for local debugging
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U demo -d demo"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  metabase:
+    image: metabase/metabase:latest
+    container_name: metabase_mcp_demo_mb
+    ports:
+      - "3000:3000"
+    environment:
+      # Metabase stores its own metadata in H2 by default — fine for a demo.
+      - MB_DB_TYPE=h2
+      # Speed up first-boot: skip the "send anonymous usage stats" prompt.
+      - MB_ANONYMOUS_TRACKING_ENABLED=false
+    depends_on:
+      postgres-data:
+        condition: service_healthy
+    restart: unless-stopped
